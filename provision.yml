@@ -1,18 +1,58 @@
----
 - hosts: provisionning
-  user: root
   vars:
     user:
       username: ansible
-      password: $6$rlLdG6wd1CT8v7i$7psP8l26lmaPhT3cigoYYXhjG28CtD1ifILq9KzvA0W0TH2Hj4.iO43RkPWgJGIi60Mz0CsxWbRVBSQkAY95W0
+      password: $6$mysecretsalt$qJbapG68nyRab3gxvKWPUcs2g3t0oMHSHMnSKecYNpSi3CuZm.GbBqXO8BE6EI6P1JUefhA0qvD7b5LSh./PU1
       public_key: ~/.ssh/id_rsa.pub
     ssh:
       port: 30000
 
   roles:
-    - common
-    - user
-    - nginx
-    - fail2ban
-    - ufw
-    - ssh
+    - role: common
+    - role: user
+    - role: geerlingguy.security
+      vars:
+        security_ssh_port: "{{ ssh.port }}"
+        security_ssh_password_authentication: "no"
+        security_ssh_permit_root_login: "no"
+        security_ssh_usedns: "no"
+        security_ssh_allowed_users: ["{{ user.username }}"]
+
+        # Firewall settings
+        security_enable_firewall: true
+        security_firewall_allowed_tcp_ports:
+          - "{{ ssh.port }}" # SSH
+          - "80" # HTTP
+          - "443" # HTTPS
+
+        # Security autoupdate
+        security_autoupdate_enabled: true
+
+        # Autoupdate mail settings used on Debian/Ubuntu only.
+        security_autoupdate_reboot: "false"
+        security_autoupdate_mail_to: "email@email.com"
+        security_autoupdate_mail_on_error: true
+
+        # fail2ban settings
+        security_fail2ban_enabled: true
+        security_fail2ban_bantime: 600
+        security_fail2ban_findtime: 600
+        security_fail2ban_maxretry: 3
+    - role: nginx
+
+  post_tasks:
+    # Ubuntu 24 ssh config reload fix
+    # Ubuntu 24 utilizes systemd's socket-based activation for SSH.
+    # As a result, changes to SSH configuration (e.g., port change) may not take effect without a reboot.
+    - name: Reboot the server if using Ubuntu 24 (sshd reload fix)
+      when: ansible_distribution == "Ubuntu" and ansible_distribution_version is search("24")
+      block:
+        # Rebooting the server with a short timeout for testing the SSH connection post-reboot
+        - reboot:
+            reboot_timeout: 0 # We changed the password, blocked SSH port, and disabled root so we don't need to wait for reboot.
+            test_command: whoami # Simple command to check if the server is back online
+          failed_when: false # Mark the task as a success even if there's a timeout
+      rescue:
+        # If the server doesn't reconnect after the reboot, this message will be shown, but no task failure occurs
+        - debug:
+            msg: "Server failed to reconnect during Ubuntu 24 reboot (ssh config force reload), but we're ignoring the timeout error."

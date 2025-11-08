@@ -1,0 +1,4 @@
+---
+# External roles from Ansible Galaxy
+- name: geerlingguy.security
+  version: 2.4.0

@@ -1,34 +1,94 @@
-# Fast VPS Provisioning for Basic Nginx Server
+# Ansible Security Playbook
 
-This project streamlines the setup of a Virtual Private Server (VPS) with enhanced security features for hosting a basic Nginx web server.
+This playbook implements security hardening measures using the geerlingguy.security role along with custom configurations for user management and web services.
 
-Tested on :
+## Prerequisites
 
-- Debian 12
+- Ansible 2.9 or higher
+- Root access to target servers
+- SSH access configured
+- WSL with Ubuntu distribution (if running from Windows)
 
-## Usage Instructions
+## Installation
 
-1. **Configure Hosts File**: Begin by setting up the `hosts` file with the necessary details of your VPS.
+1. Install required roles:
 
-2. **Edit Configuration File**: Modify the `provision.yml` file. Here, you can specify the default user credentials, including username, password, SSH key path, and a new SSH port. To create a hashed password for the user, follow this [guide](https://docs.ansible.com/ansible/latest/reference_appendices/faq.html#how-do-i-generate-encrypted-passwords-for-the-user-module) : `ansible all -i localhost, -m debug -a "msg={{ 'mypassword' | password_hash('sha512', 'mysecretsalt') }}"`
+```bash
+ansible-galaxy install -r requirements.yml
+```
 
-3. **Run the Playbook**: Execute the following commands to start the provisioning process:
+2. Configure your inventory file with target hosts under the `provisionning` group.
 
-   ```bash
-   wsl --distribution Ubuntu
-   ansible-playbook provision.yml -i hosts
-   ```
+## Usage
 
-## Features Included
+If using Windows with WSL:
 
-- **User Configuration**: Sets up a user account with your specified credentials.
+```bash
+wsl --distribution Ubuntu
+ansible-playbook provision.yml -i hosts
+```
 
-- **SSH Hardening**:
-  Disables password authentication to enhance security.
-  Allows you to change the SSH port for an added layer of security.
+Use it using a ssh key :
 
-- **Firewall Setup**: Configures Uncomplicated Firewall (UFW) to protect the server.
+```bash
+ansible-playbook provision.yml -i hosts --key-file ~/.ssh/id_rsa
+```
 
-- **Nginx Installation**: Installs Nginx with HTTP/2 support, optimizing performance and security.
+Remember to update the hosts file with the new SSH port and user for subsequent runs.
 
-- **Fail2Ban Integration**: Implements Fail2Ban for additional protection against unauthorized access attempts.
+## Configuration
+
+### Main Security Features
+
+- SSH Hardening (Custom port: 30000)
+- Automatic security updates with reboot scheduling
+- UFW Firewall configuration
+- fail2ban implementation
+- Email notifications for security updates
+
+### Variables
+
+Key variables are centralized for easier management:
+
+```yaml
+user:
+  username: ansible
+  password: [hashed-password]
+  public_key: ~/.ssh/id_rsa.pub
+
+ssh:
+  port: 30000
+```
+
+To crypt your password :
+
+```bash
+ansible all -i localhost, -m debug -a "msg={{ 'mypassword' | password_hash('sha512', 'mysecretsalt') }}"
+```
+
+### Firewall Rules
+
+Default allowed ports:
+
+- SSH (30000)
+- HTTP (80)
+- HTTPS (443)
+
+### Automatic Updates
+
+- Enabled with automatic reboot
+- Reboot time: 06:00
+- Email notifications configured for errors
+
+### fail2ban Configuration
+
+- Ban time: 600 seconds
+- Find time: 600 seconds
+- Max retry: 3 attempts
+
+## Roles
+
+- `common`: Base system configuration
+- `user`: User management
+- `geerlingguy.security`: Security hardening
+- `nginx`: Web server configuration
